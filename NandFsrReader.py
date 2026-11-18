@@ -357,7 +357,7 @@ class FTL:
         info = self.root[0x38 + index * 224:0x38 + (index + 1) * 224]
         meta_count, units, groups_per_page = u16(info, 4), u16(info, 14), u16(info, 10)
         sectors, area_size = u32(info, 16), u16(info, 26)
-        if meta_count not in (16, 24, 32) or area_size != 512 or not groups_per_page:
+        if not 16 <= meta_count <= 32 or area_size != 512 or not groups_per_page:
             raise FormatError('unsupported STL zone geometry')
         if not units or sectors != units * self.pages_per_unit * 8:
             raise FormatError('zone sector count disagrees with geometry')

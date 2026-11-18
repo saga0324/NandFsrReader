@@ -90,6 +90,35 @@ class ReaderTests(unittest.TestCase):
         self.assertEqual(nand.page_address(5, 2), 5 * 64 + 1)
         self.assertEqual(nand.page_address(5, 3), (4096 + 5) * 64 + 1)
 
+    def test_zone_with_28_metadata_units(self):
+        root = bytearray(0x38 + 224)
+        struct.pack_into('<H', root, 0x38 + 4, 28)
+        struct.pack_into('<H', root, 0x38 + 10, 6)
+        struct.pack_into('<H', root, 0x38 + 14, 1)
+        struct.pack_into('<I', root, 0x38 + 16, 1024)
+        struct.pack_into('<H', root, 0x38 + 26, 512)
+        struct.pack_into('<28H', root, 0x38 + 32, *range(4, 32))
+        self.ftl.root = root
+        page = bytearray(r.ERASED)
+        struct.pack_into('<H', page, 0, 0)
+        length = 4 + 512 * 6 + 512 // 8
+        count = sum(r.ZERO_BITS[b] for b in page[:length])
+        struct.pack_into('<II', page, length, count, count ^ r.MASK32)
+        context = bytearray(b'\xff' * 512)
+        struct.pack_into('<H', context, 22, 0)
+        count = sum(r.ZERO_BITS[b] for b in context[:308])
+        struct.pack_into('<II', context, 308, count, count ^ r.MASK32)
+        page[-512:] = context
+        spare = bytearray(b'\xff' * r.SPARE)
+        struct.pack_into('<HH', spare, 32, 0x0440 ^ 0xffff, 0x0440)
+        self.ftl._read = lambda unit, offset: (
+            (bytes(page), bytes(spare)) if (unit, offset) == (4, 0)
+            else (r.ERASED, b'\xff' * r.SPARE))
+        zone = self.ftl._zone(0)
+        self.assertEqual(zone.bmt_areas, 1)
+        self.assertEqual(zone.sectors, 1024)
+        self.assertEqual(list(zone.mapping), [-1] * 128)
+
 
 if __name__ == '__main__':
     unittest.main()
